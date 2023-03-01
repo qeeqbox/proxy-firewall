@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from os import path, makedirs
 from subprocess import Popen, PIPE
 from argparse import ArgumentParser
+from functools import partial
 
 import threading
 import traceback
@@ -39,25 +40,16 @@ def gen_keys():
 		backend=default_backend()
 	)
 
-	root_cert = x509.CertificateBuilder().subject_name(
-		x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u"QBProxy")])
-	).issuer_name(
-		x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u"QBProxy")])
-	).public_key(
-		root_key.public_key()
-	).serial_number(
-		x509.random_serial_number()
-	).not_valid_before(
-		now
-	).not_valid_after(
-		now + timedelta(days=365)
-	).add_extension(
-		x509.BasicConstraints(ca=True, path_length=None), critical=True,
-	).add_extension(
-		x509.SubjectKeyIdentifier.from_public_key(root_key.public_key()), critical=False,
-	).add_extension(
-		x509.AuthorityKeyIdentifier.from_issuer_public_key(root_key.public_key()), critical=False,
-	).sign(root_key, hashes.SHA256(), default_backend())
+	root_cert = x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u"QBProxy")])).\
+	issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u"QBProxy")])).\
+	public_key(root_key.public_key()).\
+	serial_number(x509.random_serial_number()).\
+	not_valid_before(now).\
+	not_valid_after(now + timedelta(days=365)).\
+	add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True,).\
+	add_extension(x509.SubjectKeyIdentifier.from_public_key(root_key.public_key()), critical=False,).\
+	add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(root_key.public_key()), critical=False,).\
+	sign(root_key, hashes.SHA256(), default_backend())
 
 	cert_key_ = rsa.generate_private_key(
 		public_exponent=65537,
@@ -107,6 +99,12 @@ def run_server(parsed_args):
 
 		lock = threading.Lock()
 
+
+		def __init__(self, block_website, block_content, *args, **kwargs):
+			self.block_website = block_website
+			self.block_content = block_content
+			super().__init__(*args, **kwargs)
+
 		def do_GET(self):
 			path = None
 			server = None
@@ -129,31 +127,52 @@ def run_server(parsed_args):
 			try:
 				filter_headers = ['connection','keep-alive','proxy-authenticate','proxy-authorization','te','trailers','transfer-encoding','upgrade']
 				data_in = self.rfile.read(int(self.headers.get('Content-Length', 0)))
-				self.log_message('In < %s\n\n%s',str(self.headers).strip(),data_in)
+				self.log_message('In \n\n%s\n\n%s',str(self.headers).strip(),data_in)
 				server.request(self.command, path, data_in, self.headers)
 				response = server.getresponse()
+				response_raw = response.read()
+
+				if self.block_content != None:
+					if self.block_content in response_raw.decode('utf-8','ignore'):
+						response_raw = b'Blocked\r\n'
+
 				self.send_response(response.status)
 				for header in response.getheaders():
 					if header[0].lower() not in filter_headers:
+						if header[0].lower() == 'content-length':
+							temp = list(header)
+							temp[1] = len(response_raw)
+							header = tuple(temp)
 						self.send_header(*header)
 				self.end_headers()
-				response_raw = response.read()
+
 				self.wfile.write(response_raw)
 				self.wfile.flush()
 				headers = "\n".join("{}={}".format(item[0],item[1]) for item in response.getheaders())
 				if ('Content-Encoding', 'gzip') in response.getheaders():
-					self.log_message('Out > %s\n\n%s',headers,decompress(response_raw, MAX_WBITS | 16))
+					self.log_message('Out \n\n%s\n\n%s',headers,decompress(response_raw, MAX_WBITS | 16))
 				else:
-					self.log_message('Out > %s\n\n%s',headers,response_raw)
+					self.log_message('Out \n\n%s\n\n%s',headers,response_raw)
 			except Exception as e:
 				print(traceback.format_exc())
 				pass
 
 		def do_CONNECT(self):
-			self.send_response(200, 'Connection Established')
-			self.end_headers()
+
 			self.hostname = self.path.split(':')[0]
 			self.port = self.path.split(':')[1]
+
+			if self.block_website != None:
+				if self.hostname in self.block_website:
+					self.log_message('Website is blacklisted %s',self.path)
+					self.connection.close()
+					return
+				
+			self.log_message('Website is whitelisted %s',self.path)
+
+			self.send_response(200, 'Connection Established')
+			self.end_headers()
+
 			try:
 				cert_file = "certs/{}.crt".format(self.hostname)
 				with self.lock:
@@ -172,7 +191,8 @@ def run_server(parsed_args):
 
 						# Sign the Cert
 						now = datetime.now()
-						cert = x509.CertificateBuilder().subject_name(csr_cert.subject).\
+						cert = x509.CertificateBuilder().\
+						subject_name(csr_cert.subject).\
 						issuer_name(self.root_ca_cert_content.subject). \
 						public_key(csr_cert.public_key()).\
 						serial_number(x509.random_serial_number()).\
@@ -191,7 +211,7 @@ def run_server(parsed_args):
 				self.connection = sslctx.wrap_socket(self.connection, server_side=True)
 
 			except Exception as e:
-				print(traceback.format_exc())
+				#print(traceback.format_exc())
 				pass
 			self.rfile = self.connection.makefile('rb', self.rbufsize)
 			self.wfile = self.connection.makefile('wb', self.wbufsize)
@@ -214,7 +234,7 @@ def run_server(parsed_args):
 	class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 		pass
 
-	server = ThreadingSimpleServer(('0.0.0.0', int(parsed_args.port)), Proxy)
+	server = ThreadingSimpleServer(('0.0.0.0', int(parsed_args.port)), partial(Proxy, parsed_args.block_website,parsed_args.block_content))
 	server.serve_forever()
 
 if not path.exists('certs'):
@@ -224,5 +244,7 @@ if not path.exists('cert.key'):
 
 
 parser = ArgumentParser()
-parser.add_argument("-port", default=8080)
+parser.add_argument("--port", default=8080)
+parser.add_argument("--block-website", default=None)
+parser.add_argument("--block-content", default=None)
 run_server(parser.parse_args())
