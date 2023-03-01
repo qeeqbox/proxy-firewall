@@ -3,7 +3,10 @@ HTTPS Proxy Firewall for testing PI
 
 ### Run
 ```sh
-python3 qbproxy.py
+python3 qbproxy.py --block-website example
+```
+```sh
+python3 qbproxy.py --block-website example --block-content 8.8.8.8
 ```
 
 ### Install Root CA
