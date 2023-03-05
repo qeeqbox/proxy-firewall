@@ -2,7 +2,7 @@ FROM alpine:edge
 ENV DISPLAY :0
 RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
 RUN apk update
-RUN apk add --no-cache fluxbox supervisor xterm bash chromium firefox novnc ca-certificates  xvfb x11vnc 
+RUN apk add --no-cache openbox supervisor xterm bash chromium firefox novnc ca-certificates  xvfb x11vnc 
 ADD supervisord.conf /etc/supervisord.conf
 COPY cert.key .
 COPY root_ca.key .
