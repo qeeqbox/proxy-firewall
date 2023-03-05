@@ -1,0 +1,29 @@
+version: '3.1'
+
+services:
+  firewall:
+    build:
+      context: .
+      dockerfile: ./firewall-proxy-dockerfile
+    networks:
+      - backend
+      - frontend
+    expose:
+      - "8080"
+
+  endpoint:
+    build:
+      context: .
+      dockerfile: ./endpoint-dockerfile
+    networks:
+      - backend
+      - frontend
+    ports:
+      - "6901:6901"
+      - "5901:5901"
+
+networks:
+  frontend:
+    internal: false
+  backend:
+    internal: true

@@ -10,17 +10,21 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 from datetime import datetime, timedelta
-from os import path, makedirs
+from os import makedirs, path, scandir, devnull, getuid
 from subprocess import Popen, PIPE
 from argparse import ArgumentParser
 from functools import partial
 
 import threading
 import traceback
+import sys
 
 from warnings import filterwarnings
 filterwarnings(action='ignore', module='.*OpenSSL.*')
 filterwarnings(action='ignore', module='.*ssl.*')
+
+old_stderr = sys.stderr
+sys.stderr = open(devnull, 'w')
 
 def gen_keys():
 
@@ -154,7 +158,7 @@ def run_server(parsed_args):
 				else:
 					self.log_message('Out \n\n%s\n\n%s',headers,response_raw)
 			except Exception as e:
-				print(traceback.format_exc())
+				#print(traceback.format_exc())
 				pass
 
 		def do_CONNECT(self):

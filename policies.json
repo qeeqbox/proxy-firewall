@@ -1,0 +1,18 @@
+{
+"policies": {
+"Certificates": {
+    "ImportEnterpriseRoots": true,
+    "Install": [
+               "/root_ca.crt",
+               "usr/local/share/ca-certificates/root_ca.crt"
+               ]
+         },
+        "Proxy": {
+            "Mode": "manual",
+            "Locked": true,
+            "HTTPProxy": "firewall:8080",
+            "UseHTTPProxyForAllProtocols": true,
+            "Passthrough": ""
+        }
+    }
+}

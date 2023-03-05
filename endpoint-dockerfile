@@ -1,0 +1,15 @@
+FROM alpine:edge
+ENV DISPLAY :0
+RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+RUN apk update
+RUN apk add --no-cache fluxbox supervisor xterm bash chromium firefox novnc ca-certificates  xvfb x11vnc 
+ADD supervisord.conf /etc/supervisord.conf
+COPY cert.key .
+COPY root_ca.key .
+COPY root_ca.crt .
+copy policies.json /usr/lib/firefox/distribution/policies.json
+RUN cp root_ca.crt /usr/local/share/ca-certificates/root_ca.crt && update-ca-certificates
+RUN ln -s /usr/share/novnc/vnc_lite.html /usr/share/novnc/index.html
+ENV HTTP_PROXY firewall:8080
+ENV HTTPS_PROXY firewall:8080
+ENTRYPOINT ["supervisord"]
