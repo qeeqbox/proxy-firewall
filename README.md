@@ -1,5 +1,5 @@
 # HTTPS Proxy Firewall
-HTTPS Proxy Firewall for testing PI
+HTTPS Proxy Firewall
 
 ### Run (Auto)
 ```sh
