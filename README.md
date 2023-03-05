@@ -1,7 +1,15 @@
 # HTTPS Proxy Firewall
 HTTPS Proxy Firewall for testing PI
 
-### Run
+### Run (Auto)
+```sh
+git clone https://github.com/qeeqbox/proxy-firewall
+cd proxy-firewall
+sudo docker-compose up --build --force-recreate
+open 127.0.0.1:6901
+```
+
+### Run (Manual)
 ```sh
 python3 qbproxy.py --block-website example
 ```
